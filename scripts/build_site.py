@@ -329,6 +329,22 @@ def clean_text(value: str | None) -> str:
     return re.sub(r"\s+", " ", html.unescape(value or "")).strip()
 
 
+def to_iso8601(value: str) -> str:
+    """Normaliza la fecha a ISO 8601.
+
+    micro.blog sirve `dt-published` como 'YYYY-MM-DD HH:MM:SS +0200' (no-ISO),
+    mientras que el feed ya viene en ISO. Devuelve el texto original si no encaja.
+    """
+    text = clean_text(value)
+    match = re.match(
+        r"(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2}(?::\d{2})?)\s*([+-]\d{2}):?(\d{2})?", text
+    )
+    if not match:
+        return text
+    date_part, time_part, offset_hours, offset_minutes = match.groups()
+    return f"{date_part}T{time_part}{offset_hours}:{offset_minutes or '00'}"
+
+
 def slugify(value: str) -> str:
     value = value.lower().strip()
     value = re.sub(r"[^a-z0-9áéíóúüñ-]+", "-", value)
@@ -380,6 +396,19 @@ def title_for(post: Post) -> str:
     return post.filename.removesuffix(".md")
 
 
+def description_for(post: Post) -> str:
+    """Resumen de una frase. Si el post no tiene texto (solo imágenes),
+    recurre al título antes que a un literal genérico."""
+    text = html_to_text(post.content_html)
+    if text:
+        match = re.search(r"(.{40,}?[.!?])\s", text)
+        excerpt = match.group(1) if match else text[:200]
+        return clean_text(excerpt[:220]).rstrip(" ,;:")
+    if post.title:
+        return clean_text(post.title)
+    return "Entrada con imágenes."
+
+
 def write_note(post: Post) -> None:
     title = title_for(post)
     markdown = html_to_markdown(post.content_html)
@@ -389,10 +418,10 @@ def write_note(post: Post) -> None:
         frontmatter({
             "type": "Entrada",
             "title": title,
-            "description": excerpt_from_html(post.content_html),
+            "description": description_for(post),
             "resource": post.url,
             "tags": post.tags,
-            "timestamp": post.published,
+            "timestamp": to_iso8601(post.published),
         })
         + markdown
         + f"\n\n# Citations\n\n[1] [Original en impermanente.es]({post.url})\n"
@@ -425,7 +454,7 @@ def write_indexes(posts: list[Post]) -> None:
     for year, year_posts in groups.items():
         root += f"### {year}\n\n"
         for post in year_posts:
-            root += f"* [{title_for(post)}](/notas/{post.filename}) - {excerpt_from_html(post.content_html)}\n"
+            root += f"* [{title_for(post)}](/notas/{post.filename}) - {description_for(post)}\n"
         root += "\n"
     (OUTPUT_DIR / "index.md").write_text(root, encoding="utf-8")
 
@@ -433,7 +462,7 @@ def write_indexes(posts: list[Post]) -> None:
     for year, year_posts in groups.items():
         notes += f"## {year}\n\n"
         for post in year_posts:
-            notes += f"* [{title_for(post)}]({post.filename}) - {excerpt_from_html(post.content_html)}\n"
+            notes += f"* [{title_for(post)}]({post.filename}) - {description_for(post)}\n"
         notes += "\n"
     (OUTPUT_DIR / "notas" / "index.md").write_text(notes, encoding="utf-8")
 
