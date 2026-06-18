@@ -17,7 +17,7 @@ El build consulta `sitemap.xml`, usa `feed.json` como fast-path para recientes y
 
 ## Deploy
 
-Push a `main` dispara `.github/workflows/build.yml`; el cron corre cada 6h. No se commitea `output/` ni `.venv/`.
+Push a `main` dispara `.github/workflows/build.yml`; el cron corre cada 12h. No se commitea `output/` ni `.venv/`.
 
 ## Convenciones
 

@@ -5,8 +5,8 @@ on:
     branches: [main]
   workflow_dispatch:
   schedule:
-    # Cada hora: detecta posts nuevos y rebuild + deploy.
-    - cron: '17 * * * *'
+    # Cada 12 horas: detecta posts nuevos y rebuild + deploy.
+    - cron: '17 */12 * * *'
 
 permissions:
   contents: write
