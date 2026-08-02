@@ -26,6 +26,10 @@ AUTHOR_NAME = "J.R. Cruciani"
 LICENSE_URL = "https://creativecommons.org/licenses/by/4.0/"
 USER_AGENT = "impermanente-okf/0.1 (+https://okf.impermanente.es/)"
 SCRAPE_DELAY_SECONDS = 0.6
+# Salvaguardas para no publicar un bundle vacío o parcial si el blog de origen
+# está caído (p. ej. durante un cambio de DNS) cuando corre el cron.
+MIN_EXPECTED_POSTS = 50
+MIN_COVERAGE = 0.9
 POST_RE = re.compile(r"^https://impermanente\.es/(\d{4})/(\d{2})/(\d{2})/([^/]+)\.html$")
 VOID_TAGS = {"area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "param", "source", "track", "wbr"}
 
@@ -545,6 +549,31 @@ def validate_output() -> None:
             raise SystemExit(f"Conformance: ruta absoluta filtrada en {path.relative_to(OUTPUT_DIR)}")
 
 
+def validate_volume(stats: dict[str, int]) -> None:
+    """Aborta si el bundle sale sospechosamente vacío.
+
+    validate_output() comprueba el FORMATO de lo generado, pero no el volumen:
+    un bundle con 0 notas es formalmente válido y se publicaría igual,
+    sustituyendo silenciosamente el archivo bueno por uno vacío.
+
+    Eso es exactamente lo que pasaría si `impermanente.es` estuviera caído o
+    en mitad de un cambio de DNS cuando corre el cron de cada 12 h. Mejor
+    fallar ruidosamente y conservar el despliegue anterior.
+    """
+    generated = stats.get("generated", 0)
+    expected = stats.get("sitemap_posts", 0)
+    if generated < MIN_EXPECTED_POSTS:
+        raise SystemExit(
+            f"Abortado: solo {generated} posts generados (mínimo {MIN_EXPECTED_POSTS}). "
+            f"¿Está {SOURCE_BLOG} accesible? No se publica un bundle incompleto."
+        )
+    if expected and generated < expected * MIN_COVERAGE:
+        raise SystemExit(
+            f"Abortado: {generated}/{expected} posts capturados "
+            f"(<{MIN_COVERAGE:.0%} del sitemap). No se publica un bundle parcial."
+        )
+
+
 def build() -> dict[str, int]:
     if OUTPUT_DIR.exists():
         shutil.rmtree(OUTPUT_DIR)
@@ -588,6 +617,7 @@ def build() -> dict[str, int]:
     write_landing(posts, stats)
     make_tarball()
     validate_output()
+    validate_volume(stats)
 
     print(
         "OKF generado: "
