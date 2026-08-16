@@ -13,7 +13,7 @@ pip install -r requirements.txt
 python3 scripts/build_site.py
 ```
 
-El build consulta `sitemap.xml`, usa `feed.json` como fast-path para recientes y scrapea HTML público para el resto. Tolera fallos por post y reporta capturados vs sitemap.
+El build consulta `sitemap.xml` y scrapea el HTML público de todas las entradas para conservar el contenido y los textos `alt` actuales. `feed.json` solo completa metadatos ausentes. Si falla cualquier entrada, aborta el deploy y conserva la versión anterior.
 
 ## Deploy
 

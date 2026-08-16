@@ -211,6 +211,20 @@ def scrape_post(url: str) -> Post | None:
     )
 
 
+def enrich_scraped_post(post: Post, feed_post: Post | None) -> Post:
+    """Conserva el HTML vivo y usa el feed solo para completar metadatos."""
+    if not feed_post:
+        return post
+    return Post(
+        url=post.url,
+        title=post.title or feed_post.title,
+        content_html=post.content_html,
+        published=post.published or feed_post.published,
+        tags=dedupe([*post.tags, *feed_post.tags]),
+        source=post.source,
+    )
+
+
 class MarkdownConverter(HTMLParser):
     BLOCK_TAGS = {"p", "div", "section", "article"}
     LIST_TAGS = {"ul", "ol"}
@@ -562,6 +576,12 @@ def validate_volume(stats: dict[str, int]) -> None:
     """
     generated = stats.get("generated", 0)
     expected = stats.get("sitemap_posts", 0)
+    failed = stats.get("failed", 0)
+    if failed:
+        raise SystemExit(
+            f"Abortado: no se pudieron leer {failed} posts desde su HTML público. "
+            "El despliegue anterior se conserva para no publicar contenido ni textos ALT obsoletos."
+        )
     if generated < MIN_EXPECTED_POSTS:
         raise SystemExit(
             f"Abortado: solo {generated} posts generados (mínimo {MIN_EXPECTED_POSTS}). "
@@ -586,21 +606,19 @@ def build() -> dict[str, int]:
     posts: list[Post] = []
     failures: list[tuple[str, str]] = []
     for url in urls:
-        post = feed.get(url)
-        if not post:
-            try:
-                post = scrape_post(url)
-                time.sleep(SCRAPE_DELAY_SECONDS)
-            except (urllib.error.URLError, TimeoutError, ValueError) as exc:
-                failures.append((url, str(exc)))
-                continue
-            except Exception as exc:  # noqa: BLE001 - tolera páginas viejas raras
-                failures.append((url, str(exc)))
-                continue
+        try:
+            post = scrape_post(url)
+            time.sleep(SCRAPE_DELAY_SECONDS)
+        except (urllib.error.URLError, TimeoutError, ValueError) as exc:
+            failures.append((url, str(exc)))
+            continue
+        except Exception as exc:  # noqa: BLE001 - tolera páginas viejas raras
+            failures.append((url, str(exc)))
+            continue
         if not post:
             failures.append((url, "no se encontró e-content"))
             continue
-        posts.append(post)
+        posts.append(enrich_scraped_post(post, feed.get(url)))
 
     posts.sort(key=lambda item: item.published or item.url, reverse=True)
     for post in posts:
@@ -608,7 +626,7 @@ def build() -> dict[str, int]:
     stats = {
         "sitemap_posts": len(urls),
         "generated": len(posts),
-        "feed": sum(1 for post in posts if post.source == "feed"),
+        "feed_enriched": sum(1 for post in posts if post.url in feed),
         "scraped": sum(1 for post in posts if post.source == "scrape"),
         "failed": len(failures),
     }
@@ -622,7 +640,8 @@ def build() -> dict[str, int]:
     print(
         "OKF generado: "
         f"{stats['generated']}/{stats['sitemap_posts']} posts "
-        f"({stats['feed']} feed, {stats['scraped']} scrapeados, {stats['failed']} fallos)."
+        f"({stats['scraped']} scrapeados, {stats['feed_enriched']} enriquecidos con feed, "
+        f"{stats['failed']} fallos)."
     )
     for url, error in failures[:10]:
         print(f"Aviso: no capturado {url}: {error}")

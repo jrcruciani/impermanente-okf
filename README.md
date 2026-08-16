@@ -15,8 +15,10 @@ La salida va a `output/` e incluye `index.md`, `log.md`, `notas/*.md`, `okf.tar.
 ## Fuente
 
 - `https://impermanente.es/sitemap.xml` enumera el archivo completo.
-- `https://impermanente.es/feed.json` enriquece los posts recientes.
-- Los posts antiguos se leen desde HTML público con microformats2 (`h-entry`, `p-name`, `e-content`, `dt-published`, `p-category`).
+- El HTML público con microformats2 (`h-entry`, `p-name`, `e-content`, `dt-published`, `p-category`) es la fuente canónica de todas las entradas y sus textos alternativos.
+- `https://impermanente.es/feed.json` solo completa metadatos ausentes; nunca sustituye el contenido HTML.
+
+El build se aborta si no puede leer alguna entrada desde su HTML público. Así se conserva el despliegue anterior en vez de publicar contenido o textos `alt` obsoletos.
 
 ## Deploy
 
