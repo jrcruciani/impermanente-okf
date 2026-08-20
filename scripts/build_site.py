@@ -20,7 +20,7 @@ OUTPUT_DIR = ROOT / "output"
 
 SITE_DOMAIN = "okf.impermanente.es"
 SITE_URL = f"https://{SITE_DOMAIN}"
-SOURCE_BLOG = "https://impermanente.es"
+SOURCE_BLOG = "https://blog.impermanente.es"
 PHOTOS_URL = "https://fotos.impermanente.es"
 AUTHOR_NAME = "J.R. Cruciani"
 LICENSE_URL = "https://creativecommons.org/licenses/by/4.0/"
@@ -30,7 +30,7 @@ SCRAPE_DELAY_SECONDS = 0.6
 # está caído (p. ej. durante un cambio de DNS) cuando corre el cron.
 MIN_EXPECTED_POSTS = 50
 MIN_COVERAGE = 0.9
-POST_RE = re.compile(r"^https://impermanente\.es/(\d{4})/(\d{2})/(\d{2})/([^/]+)\.html$")
+POST_RE = re.compile(r"^https://blog\.impermanente\.es/(\d{4})/(\d{2})/(\d{2})/([^/]+)\.html$")
 VOID_TAGS = {"area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "param", "source", "track", "wbr"}
 
 
@@ -442,7 +442,7 @@ def write_note(post: Post) -> None:
             "timestamp": to_iso8601(post.published),
         })
         + markdown
-        + f"\n\n# Citations\n\n[1] [Original en impermanente.es]({post.url})\n"
+        + f"\n\n# Citations\n\n[1] [Original en el blog]({post.url})\n"
     )
     (OUTPUT_DIR / "notas" / post.filename).write_text(body, encoding="utf-8")
 
@@ -459,13 +459,17 @@ def write_indexes(posts: list[Post]) -> None:
     root = frontmatter({
         "okf_version": "0.1",
         "title": "Impermanente — bundle OKF",
-        "description": "Archivo OKF clonable de las notas públicas de impermanente.es.",
+        "description": "Archivo OKF clonable de J.R. Cruciani: fotografía (bundle visual) y notas públicas del blog.",
     })
     root += "# Impermanente — OKF\n\n"
-    root += "Bundle Open Knowledge Format v0.1 generado desde el blog público.\n\n"
-    root += "## Enlaces\n\n"
-    root += f"* [Blog original]({SOURCE_BLOG}/) - fuente canónica\n"
-    root += f"* [Bundle de fotos]({PHOTOS_URL}/okf/) - OKF visual relacionado\n"
+    root += "Bundle Open Knowledge Format v0.1 de J.R. Cruciani — fotógrafo y escritor.\n\n"
+    root += "## Fotografía\n\n"
+    root += f"La obra fotográfica es la faceta creativa principal. El archivo visual "
+    root += f"vive en su propio bundle OKF:\n\n"
+    root += f"* [**Bundle OKF de fotos**]({PHOTOS_URL}/okf/) - archivo fotográfico completo (colecciones y fotografías, con alt-text y lugar).\n"
+    root += f"* [Galería]({PHOTOS_URL}/) - fotografía de umbrales, calle, ciudades y luz dorada.\n\n"
+    root += "## Escritura — notas del blog\n\n"
+    root += f"* [Blog original]({SOURCE_BLOG}/) - fuente canónica de las notas\n"
     root += f"* [llms.txt del blog]({SOURCE_BLOG}/llms.txt) - índice para LLMs\n"
     root += "* [Tarball](/okf.tar.gz) - descarga clonable del bundle\n\n"
     root += "## Notas\n\n"
@@ -521,14 +525,15 @@ def write_landing(posts: list[Post], stats: dict[str, int]) -> None:
   <main>
     <p class="meta">Open Knowledge Format v0.1</p>
     <h1>Impermanente, en Markdown clonable.</h1>
-    <p>Este sitio publica un bundle OKF generado desde el contenido público de <a href="{SOURCE_BLOG}/">impermanente.es</a>. GitHub Pages sirve los `.md` crudos en la raíz.</p>
+    <p>Bundle OKF de <strong>J.R. Cruciani</strong> — fotógrafo y escritor. La obra fotográfica es la faceta creativa principal; este sitio publica además las notas del blog en Markdown. GitHub Pages sirve los `.md` crudos en la raíz.</p>
     <ul>
-      <li><a href="/index.md">Índice OKF</a></li>
+      <li><a href="{PHOTOS_URL}/okf/">Bundle OKF de fotos</a> — archivo fotográfico (faceta principal)</li>
+      <li><a href="{PHOTOS_URL}/">Galería</a> — fotografía de umbrales</li>
+      <li><a href="/index.md">Índice OKF (notas del blog)</a></li>
       <li><a href="/okf.tar.gz">Descargar okf.tar.gz</a></li>
-      <li><a href="{SOURCE_BLOG}/">Blog original</a></li>
-      <li><a href="{PHOTOS_URL}/okf/">Bundle OKF de fotos</a></li>
+      <li><a href="{SOURCE_BLOG}/">Blog original</a> — fuente canónica de las notas</li>
     </ul>
-    <p>{stats['generated']} conceptos generados. Última nota: {latest_link}.</p>
+    <p>{stats['generated']} notas generadas. Última: {latest_link}.</p>
   </main>
 </body>
 </html>
