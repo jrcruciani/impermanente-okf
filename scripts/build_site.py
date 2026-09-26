@@ -399,7 +399,7 @@ def frontmatter(data: dict[str, object]) -> str:
 def excerpt_from_html(value: str) -> str:
     text = html_to_text(value)
     if not text:
-        return "Entrada del blog Impermanente."
+        return "Entrada del blog de J.R. Cruciani."
     match = re.search(r"(.{40,}?[.!?])\s", text)
     excerpt = match.group(1) if match else text[:200]
     return clean_text(excerpt[:220]).rstrip(" ,;:")
@@ -458,11 +458,16 @@ def write_indexes(posts: list[Post]) -> None:
     groups = grouped_by_year(posts)
     root = frontmatter({
         "okf_version": "0.1",
-        "title": "Impermanente — bundle OKF",
+        "title": "J.R. Cruciani · impermanente · OKF",
         "description": "Archivo OKF clonable de J.R. Cruciani: fotografía (bundle visual) y notas públicas del blog.",
     })
-    root += "# Impermanente — OKF\n\n"
+    root += "# J.R. Cruciani · OKF\n\n"
     root += "Bundle Open Knowledge Format v0.1 de J.R. Cruciani — fotógrafo y escritor.\n\n"
+    root += ("## Proyecto\n\n"
+             "*impermanente* reúne fotografías y textos sobre los umbrales y los cambios. "
+             "El nombre adapta *mujō* (無常), el término budista japonés para el hecho de que nada permanece: es el tema. "
+             "*Mono no aware* (物の哀れ), la emoción ante lo efímero, es el tono. "
+             "Más contexto en [Acerca de](https://blog.impermanente.es/about/).\n\n")
     root += "## Fotografía\n\n"
     root += f"La obra fotográfica es la faceta creativa principal. El archivo visual "
     root += f"vive en su propio bundle OKF:\n\n"
@@ -509,7 +514,7 @@ def write_landing(posts: list[Post], stats: dict[str, int]) -> None:
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Impermanente — OKF</title>
+  <title>OKF · J.R. Cruciani</title>
   <meta name="description" content="Bundle Open Knowledge Format de impermanente.es">
   <style>
     body {{ margin: 0; font-family: Georgia, serif; background: #fbfaf7; color: #171717; }}
@@ -524,7 +529,7 @@ def write_landing(posts: list[Post], stats: dict[str, int]) -> None:
 <body>
   <main>
     <p class="meta">Open Knowledge Format v0.1</p>
-    <h1>Impermanente, en Markdown clonable.</h1>
+    <h1>impermanente, en Markdown clonable.</h1>
     <p>Bundle OKF de <strong>J.R. Cruciani</strong> — fotógrafo y escritor. La obra fotográfica es la faceta creativa principal; este sitio publica además las notas del blog en Markdown. GitHub Pages sirve los `.md` crudos en la raíz.</p>
     <ul>
       <li><a href="{PHOTOS_URL}/okf/">Bundle OKF de fotos</a> — archivo fotográfico (faceta principal)</li>
