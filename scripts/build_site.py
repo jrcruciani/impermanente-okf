@@ -350,7 +350,7 @@ def clean_text(value: str | None) -> str:
 def to_iso8601(value: str) -> str:
     """Normaliza la fecha a ISO 8601.
 
-    micro.blog sirve `dt-published` como 'YYYY-MM-DD HH:MM:SS +0200' (no-ISO),
+    El HTML del blog sirve `dt-published` como 'YYYY-MM-DD HH:MM:SS +0200' (no-ISO),
     mientras que el feed ya viene en ISO. Devuelve el texto original si no encaja.
     """
     text = clean_text(value)

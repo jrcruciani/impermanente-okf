@@ -1,6 +1,6 @@
 # impermanente-okf
 
-Generador estático del bundle **Open Knowledge Format (OKF) v0.1** de [`impermanente.es`](https://impermanente.es/). El blog vive en micro.blog; este repo crea una copia clonable en Markdown con frontmatter YAML y la sirve en `https://okf.impermanente.es/`.
+Generador estático del bundle **Open Knowledge Format (OKF) v0.1** de [`impermanente.es`](https://impermanente.es/). El blog es un sitio Hugo propio (`https://blog.impermanente.es/`); este repo crea una copia clonable en Markdown con frontmatter YAML y la sirve en `https://okf.impermanente.es/`.
 
 ## Build local
 
