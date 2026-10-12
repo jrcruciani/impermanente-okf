@@ -20,8 +20,21 @@ OUTPUT_DIR = ROOT / "output"
 
 SITE_DOMAIN = "okf.impermanente.es"
 SITE_URL = f"https://{SITE_DOMAIN}"
-SOURCE_BLOG = "https://blog.impermanente.es"
-PHOTOS_URL = "https://fotos.impermanente.es"
+# Origen del blog. Tras el corte a un solo dominio el blog vive en impermanente.es/blog/;
+# select_source() detecta cual esta activo (nuevo primero) para que el cron funcione
+# antes y despues del cambio sin tocar nada.
+SOURCES = {
+    "nuevo": dict(blog="https://impermanente.es/blog", site="https://impermanente.es", sitemap="https://impermanente.es/sitemap.xml",
+                  feed="https://impermanente.es/blog/feed.json", photos="https://impermanente.es/fotos",
+                  llms="https://impermanente.es/llms.txt", about="https://impermanente.es/acerca/", photos_okf=None),
+    "antiguo": dict(blog="https://blog.impermanente.es", site="https://blog.impermanente.es", sitemap="https://blog.impermanente.es/sitemap.xml",
+                    feed="https://blog.impermanente.es/feed.json", photos="https://fotos.impermanente.es",
+                    llms="https://blog.impermanente.es/llms.txt", about="https://blog.impermanente.es/about/",
+                    photos_okf="https://fotos.impermanente.es/okf/"),
+}
+SOURCE_BLOG = SOURCES["antiguo"]["blog"]
+PHOTOS_URL = SOURCES["antiguo"]["photos"]
+ACTIVE = SOURCES["antiguo"]
 AUTHOR_NAME = "J.R. Cruciani"
 LICENSE_URL = "https://creativecommons.org/licenses/by/4.0/"
 USER_AGENT = "impermanente-okf/0.1 (+https://okf.impermanente.es/)"
@@ -30,7 +43,25 @@ SCRAPE_DELAY_SECONDS = 0.6
 # está caído (p. ej. durante un cambio de DNS) cuando corre el cron.
 MIN_EXPECTED_POSTS = 50
 MIN_COVERAGE = 0.9
-POST_RE = re.compile(r"^https://blog\.impermanente\.es/(\d{4})/(\d{2})/(\d{2})/([^/]+)\.html$")
+POST_RE = re.compile(
+    r"^https://(?:blog\.impermanente\.es/(\d{4})/(\d{2})/(\d{2})/([^/]+)\.html"
+    r"|impermanente\.es/blog/(\d{4})/(\d{2})/(\d{2})/([^/]+)/)$")
+LEGACY_SLUGS_PATH = ROOT / "data" / "slugs-legacy.json"
+
+
+def parse_url(url: str):
+    """(aaaa, mm, dd, slug) de una URL de post, antigua o nueva; None si no lo es.
+    El slug se normaliza al antiguo (el que daba nombre a las notas) si se conoce, para que los
+    nombres de fichero y las URLs de las notas en okf no cambien con el corte."""
+    m = POST_RE.match(url or "")
+    if not m:
+        return None
+    g = [x for x in m.groups() if x is not None]
+    y, mo, d, slug = g
+    if "/blog/" in url and url.startswith("https://impermanente.es/"):
+        legacy = json.loads(LEGACY_SLUGS_PATH.read_text(encoding="utf-8")) if LEGACY_SLUGS_PATH.exists() else {}
+        slug = legacy.get(f"/blog/{y}/{mo}/{d}/{slug}/", slug)
+    return y, mo, d, slug
 VOID_TAGS = {"area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "param", "source", "track", "wbr"}
 
 
@@ -45,24 +76,24 @@ class Post:
 
     @property
     def filename(self) -> str:
-        match = POST_RE.match(self.url)
+        match = parse_url(self.url)
         if not match:
             return slugify(self.title or "nota") + ".md"
-        year, month, day, slug = match.groups()
+        year, month, day, slug = match
         return f"{year}-{month}-{day}-{slugify(slug)}.md"
 
     @property
     def year(self) -> str:
-        match = POST_RE.match(self.url)
+        match = parse_url(self.url)
         if match:
-            return match.group(1)
+            return match[0]
         return (self.published or "0000")[:4]
 
     @property
     def date_prefix(self) -> str:
-        match = POST_RE.match(self.url)
+        match = parse_url(self.url)
         if match:
-            return "-".join(match.groups()[:3])
+            return "-".join(match[:3])
         return (self.published or "0000-00-00")[:10]
 
 
@@ -77,19 +108,40 @@ def fetch_json(url: str) -> dict:
     return json.loads(fetch_text(url))
 
 
-def sitemap_post_urls() -> list[str]:
-    xml = fetch_text(f"{SOURCE_BLOG}/sitemap.xml")
-    root = ET.fromstring(xml)
+def sitemap_post_urls(sitemap: str | None = None, _depth: int = 0) -> list[str]:
+    """URLs de posts del sitemap; sigue los indices de sitemaps (el dominio nuevo publica un indice)."""
+    root = ET.fromstring(fetch_text(sitemap or ACTIVE["sitemap"]))
     urls = []
     for loc in root.iter():
-        if loc.tag.endswith("loc") and loc.text and POST_RE.match(loc.text.strip()):
-            urls.append(loc.text.strip())
+        if not (loc.tag.endswith("loc") and loc.text):
+            continue
+        u = loc.text.strip()
+        if POST_RE.match(u):
+            urls.append(u)
+        elif root.tag.endswith("sitemapindex") and _depth < 2:
+            urls += sitemap_post_urls(u, _depth + 1)
     return sorted(set(urls), reverse=True)
+
+
+def select_source() -> str:
+    """Elige el origen activo: el nuevo si ya publica posts con la URL nueva; si no, el antiguo."""
+    global SOURCE_BLOG, PHOTOS_URL, ACTIVE
+    nombre = "antiguo"
+    try:
+        feed = fetch_json(SOURCES["nuevo"]["feed"])
+        if any(POST_RE.match(i.get("url") or "") and "/blog/" in (i.get("url") or "") for i in feed.get("items", [])):
+            nombre = "nuevo"
+    except Exception as exc:  # noqa: BLE001
+        print(f"Origen nuevo no disponible ({exc}); uso el antiguo")
+    ACTIVE = SOURCES[nombre]
+    SOURCE_BLOG, PHOTOS_URL = ACTIVE["blog"], ACTIVE["photos"]
+    print(f"Origen del blog: {nombre} ({SOURCE_BLOG})")
+    return nombre
 
 
 def feed_posts() -> dict[str, Post]:
     try:
-        feed = fetch_json(f"{SOURCE_BLOG}/feed.json")
+        feed = fetch_json(ACTIVE["feed"])
     except Exception as exc:  # noqa: BLE001 - build tolerante ante fallo remoto puntual
         print(f"Aviso: no pude leer feed.json: {exc}")
         return {}
@@ -467,15 +519,16 @@ def write_indexes(posts: list[Post]) -> None:
              "*impermanente* reúne fotografías y textos sobre los umbrales y los cambios. "
              "El nombre adapta *mujō* (無常), el término budista japonés para el hecho de que nada permanece: es el tema. "
              "*Mono no aware* (物の哀れ), la emoción ante lo efímero, es el tono. "
-             "Más contexto en [Acerca de](https://blog.impermanente.es/about/).\n\n")
+             f"Más contexto en [Acerca de]({ACTIVE['about']}).\n\n")
     root += "## Fotografía\n\n"
     root += f"La obra fotográfica es la faceta creativa principal. El archivo visual "
     root += f"vive en su propio bundle OKF:\n\n"
-    root += f"* [**Bundle OKF de fotos**]({PHOTOS_URL}/okf/) - archivo fotográfico completo (colecciones y fotografías, con alt-text y lugar).\n"
+    if ACTIVE["photos_okf"]:
+        root += f"* [**Bundle OKF de fotos**]({ACTIVE['photos_okf']}) - archivo fotográfico completo (colecciones y fotografías, con alt-text y lugar).\n"
     root += f"* [Galería]({PHOTOS_URL}/) - fotografía de umbrales, calle, ciudades y luz dorada.\n\n"
     root += "## Escritura — notas del blog\n\n"
     root += f"* [Blog original]({SOURCE_BLOG}/) - fuente canónica de las notas\n"
-    root += f"* [llms.txt del blog]({SOURCE_BLOG}/llms.txt) - índice para LLMs\n"
+    root += f"* [llms.txt del blog]({ACTIVE['llms']}) - índice para LLMs\n"
     root += "* [Tarball](/okf.tar.gz) - descarga clonable del bundle\n\n"
     root += "## Notas\n\n"
     for year, year_posts in groups.items():
@@ -532,7 +585,7 @@ def write_landing(posts: list[Post], stats: dict[str, int]) -> None:
     <h1>impermanente, en Markdown clonable.</h1>
     <p>Bundle OKF de <strong>J.R. Cruciani</strong> — fotógrafo y escritor. La obra fotográfica es la faceta creativa principal; este sitio publica además las notas del blog en Markdown. GitHub Pages sirve los `.md` crudos en la raíz.</p>
     <ul>
-      <li><a href="{PHOTOS_URL}/okf/">Bundle OKF de fotos</a> — archivo fotográfico (faceta principal)</li>
+      {('<li><a href="' + ACTIVE['photos_okf'] + '">Bundle OKF de fotos</a> — archivo fotográfico (faceta principal)</li>') if ACTIVE['photos_okf'] else ''}
       <li><a href="{PHOTOS_URL}/">Galería</a> — fotografía de umbrales</li>
       <li><a href="/index.md">Índice OKF (notas del blog)</a></li>
       <li><a href="/okf.tar.gz">Descargar okf.tar.gz</a></li>
@@ -605,6 +658,7 @@ def validate_volume(stats: dict[str, int]) -> None:
 
 
 def build() -> dict[str, int]:
+    select_source()
     if OUTPUT_DIR.exists():
         shutil.rmtree(OUTPUT_DIR)
     (OUTPUT_DIR / "notas").mkdir(parents=True)
